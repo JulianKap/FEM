@@ -6,10 +6,9 @@
     /// <summary>
     /// Класс динамического кэша.
     /// </summary>
-    public sealed class Cache <T> where T: Triangle<T>
+    internal sealed class Cache: IDisposable
     {
-
-        float xMin, yMin, xMax, yMax;  // Координаты прямоугольника, охватывающих все точки триангуляции.
+        float xMin, yMin, xMax, yMax;  // Кооввврдинаты прямоугольника, охватывающих все точки триангуляции.
         float xSize, ySize;  // Размер точки в кэше (x, y).
 
         int gain = 20;  // Предел роста кэша (зависит от коэффициета и размерности), начальное значение 20.
@@ -17,7 +16,7 @@
         int point = 0;  // Кол-во точек, используемых для кэша.
 
         const int growth = 5;  // Коэффициент роста динамического кэша, по умолчанию индекс 5 (оптимально от 3 до 8).
-        T[][] cache;  // Массив для кэширования треугольников.
+        Triangle[][] cache;  // Массив для кэширования треугольников.
 
 
         /// <summary>
@@ -25,7 +24,7 @@
         /// </summary>
         /// <param name="Min">Левая нижняя точка.</param>
         /// <param name="Max">Правая верхняя точка.</param>
-        public Cache(Vertex<T> Min, Vertex<T> Max)
+        public Cache(Vertex Min, Vertex Max)
         {
             xMin = Min.X;
             yMin = Min.Y;
@@ -34,13 +33,13 @@
             
             UpdatePointSize();
         }
-
+        
         /// <summary>
         /// Создание минимального кэша.
         /// </summary>
         /// <param name="t1">Левый треугольник.</param>
         /// <param name="t2">Правый треугольник.</param>
-        public void CreateCaсhe(T t1, T t2)
+        public void CreateCaсhe(Triangle t1, Triangle t2)
         {
             cache = UpdateArraySize(m);
 
@@ -53,8 +52,8 @@
         /// <summary>
         /// Добавление (обновление) новых треугольников в кэше.
         /// </summary>
-        /// <param name="newTriangles">Новые треугольники.</param>
-        public void UpdateCache(params T [] newTriangles)
+        /// <param name="triangle">Новый треугольник.</param>
+        public void UpdateCache(Triangle triangle)
         {
             point += 2;
 
@@ -85,13 +84,10 @@
             }
 
             // Добавление новых точек в кэш.
-            foreach (var t in newTriangles)
-            {
-                var i = (int)Math.Floor((t.Points.Sum(p => p.Y) / 3 - yMin) / ySize);
-                var j = (int)Math.Floor((t.Points.Sum(p => p.X) / 3 - xMin) / xSize);
-                
-                cache[i][j] = t;
-            }
+            var row = (int)Math.Floor((triangle.Points.Sum(p => p.Y) / 3 - yMin) / ySize);
+            var col = (int)Math.Floor((triangle.Points.Sum(p => p.X) / 3 - xMin) / xSize);
+
+            cache[row][col] = triangle;
         }
         
         /// <summary>
@@ -99,33 +95,42 @@
         /// </summary>
         /// <param name="point">Точка для поиска.</param>
         /// <returns>Возвращение треугольника из кэша.</returns>
-        public T GetTriangle(Vertex<T> point)
+        public Triangle GetTriangle(Vertex point)
         {
             return cache[(int)Math.Floor((point.Y - yMin) / ySize)][(int)Math.Floor((point.X - xMin) / xSize)];
         }
-
+        
         /// <summary>
         /// Обновление размера массива кэша.
         /// </summary>
         /// <param name="count">Колличество элементов массива.</param>
         /// <returns>Возвращение нового массива.</returns>
-        private T[][] UpdateArraySize(int count)
+        Triangle[][] UpdateArraySize(int count)
         {
-            var newCache = new T[count][];
+            var newCache = new Triangle[count][];
 
             for (int i = 0; i < count; ++i)
-                newCache[i] = new T[count];
-            
+                newCache[i] = new Triangle[count];
+
             return newCache;
         }
         
         /// <summary>
         /// Обновление размера ячейки в кэше.
         /// </summary>
-        private void UpdatePointSize()
+        void UpdatePointSize()
         {
             xSize = (xMax - xMin) / m;
             ySize = (yMax - yMin) / m;
+        }
+
+        /// <summary>
+        /// Диструктор.
+        /// </summary>
+        public void Dispose()
+        {
+            cache = null;
+            GC.SuppressFinalize(this);
         }
     }
 }

@@ -2,160 +2,164 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Windows.Forms;
     using System.IO;
+    using System.Runtime.Serialization.Formatters.Binary;
+    using Microsoft.Office.Interop.Excel;
     using Delaunay;
+    using Geometry;
 
-    ///// <summary>
-    ///// Файловые операции
-    ///// </summary>
-    //public static class FileOperations
-    //{
-    //    /// <summary>
-    //    /// Открыть список точек
-    //    /// </summary>
-    //    /// <param name="openFileDialog">Диалоговое окно, позволяющее открыть файл</param>
-    //    public static List<Vertex> OpenPoints(OpenFileDialog openFileDialog)
-    //    {
-    //        var vertex = new List<Vertex>();
 
-    //        openFileDialog.Filter = "Текстовый файл|*.txt*";
-    //        if (openFileDialog.ShowDialog() == DialogResult.OK)
-    //        {
-    //            var lineString = new StreamReader(openFileDialog.FileName);
-    //            var sLine = "";
+    /// <summary>
+    /// Файловые операции.
+    /// </summary>
+    public static class FileOperations
+    {
+        /// <summary>
+        /// Открыть список фигур.
+        /// </summary>
+        /// <param name="openFileDialog">Диалоговое окно, позволяющее открыть файл</param>
+        public static List<IFigure> OpenFigures(OpenFileDialog openFileDialog)
+        {
+            List<IFigure> figures = null;
+            openFileDialog.Filter = "Текстовый файл|*.dat*";
 
-    //            // Заполняем список точек
-    //            while (sLine != null)
-    //            {
-    //                sLine = lineString.ReadLine();
+            if (openFileDialog.ShowDialog() == DialogResult.OK)
+                using (var fStream = File.OpenRead(openFileDialog.FileName))
+                {
+                    var formatter = new BinaryFormatter();
+                    figures = (List<IFigure>)formatter.Deserialize(fStream);
+                }
 
-    //                if (sLine != null)
-    //                {
-    //                    var line = sLine.Split();
+            return figures;
+        }
 
-    //                    if (line.Count() == 2)
-    //                        vertex.Add(new Vertex(float.Parse(line[0]), float.Parse(line[1])));
-    //                }
-    //            }
-    //        }
+        /// <summary>
+        /// Быстрое сохранение (в ...\TrDelone\bin\)
+        /// </summary>
+        /// <param name="vertex">Список точек</param>
+        /// <param name="figures">Список фигур.</param>
+        /// <param name="count">Количество точек.</param>
+        public static void FastWriteData(List<Vertex> vertex, List<IFigure> figures, int count)
+        {
+            WriteFiguresDat("Figures.dat", figures);
+            WriteDataElectrodeTxt("Potential.txt", vertex, count);
+        }
+        
+        /// <summary>
+        /// Сохранить список фигур.
+        /// </summary>
+        /// <param name="saveFileDialog">Диалоговое окно, позволяющее сохранить файл.</param>
+        /// <param name="figures">Список фигур.</param>
+        public static string WriteFigures(SaveFileDialog saveFileDialog, List<IFigure> figures)
+        {
+            var str = "";
+            saveFileDialog.Filter = "Текстовый файл|*.dat";
 
-    //        return vertex;
-    //    }
+            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+            {
+                WriteFiguresDat(saveFileDialog.FileName, figures);
+                str = "Сохранение фигур завершено!";
+            }
+            return str;
+        }
 
-    //    /// <summary>
-    //    /// Открыть коллекцию треугольников
-    //    /// </summary>
-    //    /// <param name="openFileDialog">Диалоговое окно, позволяющее открыть файл</param>
-    //    public static ICollection<Triangle> OpenCollectionTriangles(OpenFileDialog openFileDialog)
-    //    {
-    //        var triangle = new List<Triangle>();
+        /// <summary>
+        /// Сохранить данные с датчиков.
+        /// </summary>
+        /// <param name="saveFileDialog">Диалоговое окно, позволяющее сохранить файл.</param>
+        /// <param name="points">Список точек.</param>
+        /// <param name="count">Количество точек.</param>
+        public static string WriteDataElectrode(SaveFileDialog saveFileDialog, List<Vertex> points, int count)
+        {
+            var str = "";
+            saveFileDialog.Filter = "Текстовый файл|*.txt";
 
-    //        openFileDialog.Filter = "Текстовый файл|*.txt*";
-    //        if (openFileDialog.ShowDialog() == DialogResult.OK)
-    //        {
-    //            var lineString = new StreamReader(openFileDialog.FileName);
-    //            var sLine = "";
+            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+            {
+                WriteDataElectrodeTxt(saveFileDialog.FileName, points, count);
+                str = "Сохранение данных расчет в файл txt завершено!";
+            }
 
-    //            // Заполняем  список треугольников
-    //            while(sLine != null)
-    //            {
-    //                sLine = lineString.ReadLine();
-                    
-    //                if (sLine != null)
-    //                {
-    //                    var line = sLine.Split();
+            return str;
+        }
 
-    //                    if (line.Count() == 6)
-    //                    {
-    //                        var t = new Triangle();
+        /// <summary>
+        /// Сохранение фигур в бинарном формате.
+        /// </summary>
+        /// <param name="saveFileDialog">Диалоговое окно, позволяющее сохранить файл.</param>
+        /// <param name="points"></param>
+        /// <param name="count">Количество точек.</param>
+        public static string WriteDataElectrodeExcel(SaveFileDialog saveFileDialog, List<Vertex> points, int count)
+        {
+            var str = "";
+            saveFileDialog.Filter = "Microsoft Excele XLSX|*.xlsx";
 
-    //                        t.Points[0] = new Vertex(float.Parse(line[0]), float.Parse(line[1]));
-    //                        t.Points[1] = new Vertex(float.Parse(line[2]), float.Parse(line[3]));
-    //                        t.Points[2] = new Vertex(float.Parse(line[4]), float.Parse(line[5]));
+            if (saveFileDialog.ShowDialog() == DialogResult.OK)
+            {
+                Microsoft.Office.Interop.Excel.Application app = new Microsoft.Office.Interop.Excel.Application();
+                Workbook book = null;
+                Worksheet sheet = null;
 
-    //                        t.Ribs[0] = new Rib(t.Points[0], t.Points[1], null, null);
-    //                        t.Ribs[1] = new Rib(t.Points[1], t.Points[2], null, null);
-    //                        t.Ribs[2] = new Rib(t.Points[2], t.Points[0], null, null);
+                if (app == null) return str;
 
-    //                        triangle.Add(t);
-    //                    }
-    //                }
-    //            }
-    //        }
-            
-    //        return triangle;
-    //    }
+                var missing = Type.Missing;
 
-    //    /// <summary>
-    //    /// Быстрое сохранение (в ...\TrDelone\bin\Release)
-    //    /// </summary>
-    //    /// <param name="vertex">Список точек</param>
-    //    /// <param name="triangles">Коллекция треугольников</param>
-    //    public static void FastWriteData(List<Vertex> vertex, ICollection<Triangle> triangles)
-    //    {
-    //        WritePointsTxt("TrPoints.txt", vertex);
-    //        WriteTriangleTxt("TrTriangles.txt", triangles);
-    //    }
+                book = app.Workbooks.Add(missing);
 
-    //    /// <summary>
-    //    /// Сохранить список точек
-    //    /// </summary>
-    //    /// <param name="saveFileDialog">Диалоговое окно, позволяющее сохранить файл</param>
-    //    /// <param name="vertex">Список точек</param>
-    //    public static void WriteDataPoints(SaveFileDialog saveFileDialog, List<Vertex> vertex)
-    //    {
-    //        saveFileDialog.Filter = "Текстовый файл|*.txt";
+                if (book != null)
+                {
+                    sheet = (Worksheet)book.Worksheets.Add(missing, missing, 1, missing);
 
-    //        if (saveFileDialog.ShowDialog() == DialogResult.OK)
-    //            WritePointsTxt(saveFileDialog.FileName, vertex);
-    //    }
+                    if (sheet != null)
+                    {
+                        var cell = sheet.Cells[1, 1] = "№";
+                        cell = sheet.Cells[1, 2] = count.ToString() + "точек";
 
-    //    /// <summary>
-    //    /// Сохранить коллекцию точек
-    //    /// </summary>
-    //    /// <param name="saveFileDialog">Диалоговое окно, позволяющее сохранить файл</param>
-    //    /// <param name="triangles">Коллекция треугольников</param>
-    //    public static void WriteDataTriangles(SaveFileDialog saveFileDialog, ICollection<Triangle> triangles)
-    //    {
-    //        saveFileDialog.Filter = "Текстовый файл|*.txt";
+                        // Данные в таблице.
+                        for (int i = 0; i < points.Count; i++)
+                        {
+                            cell = sheet.Cells[i + 2, 1] = i + 1;
+                            cell = sheet.Cells[i + 2, 2] = points[i].Potential;
+                        }
+                    }
 
-    //        if (saveFileDialog.ShowDialog() == DialogResult.OK)
-    //            WriteTriangleTxt(saveFileDialog.FileName, triangles);
-    //    }
+                    book.Close(true, saveFileDialog.FileName, missing);
+                }
+                str = "Сохранение данных расчет в файл Excel завершено!";
 
-    //    /// <summary>
-    //    /// Сохранение списка точек в txt файл
-    //    /// </summary>
-    //    /// <param name="path">Директория сохранения файла</param>
-    //    /// <param name="vertex">Список точек</param>
-    //    private static void WritePointsTxt(string path, List<Vertex> vertex)
-    //    {
-    //        using (StreamWriter writer = new StreamWriter(path))
-    //        {
-    //            writer.WriteLine(vertex.Count());
+                app.Quit();
+            }
 
-    //            foreach (var v in vertex)
-    //                writer.WriteLine(String.Format("{0} {1}", v.X, v.Y));
-    //        }
-    //    }
+            return str;
+        }
 
-    //    /// <summary>
-    //    /// Сохранение списка треугольников в txt файл
-    //    /// </summary>
-    //    /// <param name="path">Директория сохранения файла</param>
-    //    /// <param name="triangles">Коллекция треугольников</param>
-    //    private static void WriteTriangleTxt(string path, ICollection<Triangle> triangles)
-    //    {
-    //        using (StreamWriter writer = new StreamWriter(path))
-    //        {
-    //            writer.WriteLine(triangles.Count());
-
-    //            foreach (var t in triangles)
-    //                writer.WriteLine(string.Format("{0,5:F4} {1,5:F4} {2,5:F4} {3,5:F4} {4,5:F4} {5,5:F4}",
-    //                    t.Points[0].X, t.Points[0].Y, t.Points[1].X, t.Points[1].Y, t.Points[2].X, t.Points[2].Y));
-    //        }
-    //    }
-    //}
+        /// <summary>
+        /// Сохранение фигур в бинарном формате.
+        /// </summary>
+        static void WriteFiguresDat(string path, List<IFigure> figures)
+        {
+            using (var fStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                var formatter = new BinaryFormatter();
+                formatter.Serialize(fStream, figures);
+            }
+        }
+        
+        /// <summary>
+        /// Сохранение результатов расчетов в текстовом файле.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="points"></param>
+        /// <param name="count">Количество точек.</param>
+        static void WriteDataElectrodeTxt(string path, List<Vertex> points, int count)
+        {
+            using (var writer = new StreamWriter(path))
+            {
+                writer.WriteLine(count.ToString());
+                for (int i = 0; i < points.Count; i++)
+                    writer.WriteLine(i.ToString() + ": " + points[i].Potential.Value.ToString());
+            }
+        }
+    }
 }

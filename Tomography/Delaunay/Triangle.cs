@@ -5,28 +5,76 @@
     /// <summary>
     /// Класс треугольников.
     /// </summary>
-    public class Triangle<T> where T : Triangle<T>
+    [Serializable]
+    public class Triangle
     {
         /// <summary>
         /// Массив ребер в треугольнике.
         /// </summary>
-        public Rib<T>[] Ribs { get; protected set; } = new Rib<T>[3];
+        public Rib[] Ribs { get; protected set; } = new Rib[3];
 
         /// <summary>
         /// Массив точек в треугольнике.
         /// </summary>
-        public Vertex<T>[] Points { get; protected set; } = new Vertex<T>[3];
+        public Vertex[] Points { get; protected set; } = new Vertex[3];
 
         /// <summary>
         /// Площадь треугольника.
         /// </summary>
         public float square { get; protected set; }
+        
+        #region Данные для МКЭ.
+        /// <summary>
+        /// Матрица базисных функций треугольника.
+        /// a(i) b(i) c(i)
+        /// a(j) b(j) c(j)
+        /// a(m) b(m) c(m)
+        /// </summary>
+        public float[][] basic { get; private set; }
+        
+        /// <summary>
+        /// Электропроводность элемента.
+        /// </summary>
+        public float? Permeability { get; set; }
+        
 
         /// <summary>
-        /// Центр тяжести треугольника.
+        /// Вычисление матрица коэффициентов вершин треугольника.
+        /// beta(ii) beta(ji) beta(ki)
+        /// beta(ij) beta(jj) beta(kj)
+        /// beta(ik) beta(jk) beta(kk)
         /// </summary>
-        public Vertex<T> centre { get; protected set; }
+        public float GetCoefficients(int i, int j)
+        {
+            return 3f * square * (basic[j][0] * basic[i][0] + basic[j][1] * basic[i][1]);
+        }
 
+        /// <summary>
+        /// Вычисление базисных функций треугольника.
+        /// </summary>
+        public void BasicFunctionElement()
+        {
+            basic = new float[3][];
+
+            for (byte n = 0; n < 3; n++)
+            {
+                var result = new float[3];
+
+                int n1 = n + 1;
+                int n2 = n + 2;
+
+                if (n1 == 3) n1 = 0;
+                if (n2 == 3) n2 = 0;
+                else if (n2 == 4) n2 = 1;
+
+                result[0] = (Points[n1].Y - Points[n2].Y) / (2 * square);  // Коэфициент при X.
+                result[1] = (Points[n2].X - Points[n1].X) / (2 * square);  // Коэфициент при Y.
+                result[2] = (Points[n1].X * Points[n2].Y - Points[n2].X * Points[n1].Y) / (2 * square);  // Свободный член.
+
+                basic[n] = result;
+            }
+        }
+        #endregion
 
         /// <summary>
         /// Добавление ребер для нового треугольника.
@@ -34,12 +82,13 @@
         /// <param name="R1">Первое ребро.</param>
         /// <param name="R2">Второе ребро.</param>
         /// <param name="R3">Третье ребро.</param>
-        public void SetRibs(Rib<T> R1, Rib<T> R2, Rib<T> R3)
+        public void SetRibs(Rib R1, Rib R2, Rib R3)
         {
             Ribs[0] = R1;
             Ribs[1] = R2;
             Ribs[2] = R3;
-            
+
+            Сlockwise();
             SquareTriangle();
         }
 
@@ -48,7 +97,7 @@
         /// </summary>
         /// <param name="newRib">Новое ребро.</param>
         /// <param name="oldRib">Старое ребро.</param>
-        public void UpdateRib(Rib<T> newRib, Rib<T> oldRib)
+        public void UpdateRib(Rib newRib, Rib oldRib)
         {
             if (Ribs[0] == oldRib)
                 Ribs[0] = newRib;
@@ -56,7 +105,8 @@
                 Ribs[1] = newRib;
             else
                 Ribs[2] = newRib;
-            
+
+            Сlockwise();
             SquareTriangle();
         }
 
@@ -66,13 +116,11 @@
         /// <param name="A">Точка А.</param>
         /// <param name="B">Точка B.</param>
         /// <returns>Возвращаем ребро</returns>
-        public Rib<T> GetRib(Vertex<T> A, Vertex<T> B)
+        public Rib GetRib(Vertex A, Vertex B)
         {
             foreach (var rib in Ribs)
-            {
                 if (rib.A == A && rib.B == B || rib.A == B && rib.B == A)
                     return rib;
-            }
 
             throw new ArgumentException();
         }
@@ -82,9 +130,9 @@
         /// </summary>
         /// <param name="T">Треугольник.</param>
         /// <returns>Возвращение соседнего ребра.</returns>
-        public Rib<T> GetRibNeighbor(T T)
+        public Rib GetRibNeighbor(Triangle T)
         {
-            for (int i = 0; i < 3; i++)
+            for (byte i = 0; i < 3; i++)
             {
                 var rib = Ribs[i];
 
@@ -96,19 +144,19 @@
         }
 
         /// <summary>
-        /// Находится ребро, которое разделяет точку и любую вершину треугольника.
+        /// Проверка принадлежности точки треугольнику.
         /// </summary>
         /// <param name="p">Точка для проверки.</param>
-        /// <returns>Если точка попадает в треугольник, возвращается null, иначе ребро.</returns>
-        public Rib<T> GetRibDivide(Vertex<T> p)
+        /// <returns>Null - точка внутри, rib - ребро, соседнее с точкой.</returns>
+        public Rib GetRibDivide(Vertex p)
         {
             foreach (var rib in Ribs)
             {
                 // Если знак OA ^ OX совпадает со знаком OA ^ OY, то точки X и Y лежат на одной полуплоскости, иначе нет.
                 // Используется формула косого произведения векторов.
                 var y = GetVertexOpposite(rib);
-                var oxSign = Math.Sign(Vertex<T>.Pseudoscalar(rib.A, rib.B, rib.A, p));
-                var oySign = Math.Sign(Vertex<T>.Pseudoscalar(rib.A, rib.B, rib.A, y));
+                var oxSign = Math.Sign(Vertex.Pseudoscalar(rib.A, rib.B, rib.A, p));
+                var oySign = Math.Sign(Vertex.Pseudoscalar(rib.A, rib.B, rib.A, y));
 
                 if (oxSign == 0 || oySign == 0)
                     continue;
@@ -125,99 +173,90 @@
         /// </summary>
         /// <param name="rib">Ребро.</param>
         /// <returns>Возвращение вершины.</returns>
-        public Vertex<T> GetVertexOpposite(Rib<T> rib)
+        public Vertex GetVertexOpposite(Rib rib)
         {
             if (Ribs[0] == rib)
                 return Points[2];
-            else if (Ribs[1] == rib)
-                return Points[0];
 
-            return Points[1];
+            return Ribs[1] == rib? Points[0]: Points[1];
         }
-        
-        /// <summary>
-        /// Проверка равенства точки одной из вершин треугольника.
-        /// </summary>
-        /// <param name="p">Точка.</param>
-        /// <returns>True - принадлежит, false - не принадлежит.</returns>
-        public bool TrianglePointCheck(Vertex<T> p)
-        {
-            if (p == Points[0] || p == Points[1] || p == Points[2])
-                return true;
 
-            return false;
+        /// <summary>
+        /// Возвращает номер вершины треугольника.
+        /// </summary>
+        /// <param name="p">Вершина</param>
+        /// <returns>Возвращается индекс вершины в треугольнике.</returns>
+        public int GetIndexVertex(Vertex p)
+        {
+            for (byte i = 0; i < 3; i++)
+                if (p == Points[i])
+                    return i;
+
+            throw new ArgumentOutOfRangeException();
         }
 
         /// <summary>
         /// Вычисление площади треугольника.
         /// </summary>
-        private void SquareTriangle()
+        void SquareTriangle()
         {
             // Периметр треугольника.
-            var p = (Ribs[0].Lenght + Ribs[1].Lenght + Ribs[2].Lenght) / 2;
-            square = (float)Math.Sqrt(p * (p - Ribs[0].Lenght) * (p - Ribs[1].Lenght) * (p - Ribs[2].Lenght));
+            var p = (Ribs[0].lenght + Ribs[1].lenght + Ribs[2].lenght) / 2;
+            square = (float)Math.Sqrt(p * (p - Ribs[0].lenght) * (p - Ribs[1].lenght) * (p - Ribs[2].lenght));
         }
-
+        
         /// <summary>
-        /// Вычисление центра тяжести треугольника.
+        /// Центр треугольника.
         /// </summary>
-        private void CentreTriangle()
-        {
-            centre = new Vertex<T>((Points[0].X + Points[1].X + Points[2].X) / 3f, (Points[0].Y + Points[1].Y + Points[2].Y) / 3f);
-        }
+        public static Func<Triangle, Vertex> centre = (t) => 
+                  new Vertex((t.Points[0].X + t.Points[1].X + t.Points[2].X) / 3f, 
+                             (t.Points[0].Y + t.Points[1].Y + t.Points[2].Y) / 3f);
 
         /// <summary>
         /// Формирование структуры элемента, обход точек по часовой стрелке.
         /// </summary>
-        /// <param name="triangles">Треугольники.</param>
-        public void Сlockwise(params T[] triangles)
+        void Сlockwise()
         {
-            foreach (var t in triangles)
+            Vertex C = null;
+            var A = Ribs[0].A;
+            var B = Ribs[0].B;
+
+            Rib a = null;
+            Rib b = null;
+            var rib1 = Ribs[1];
+
+            if (rib1.A == A)
             {
-                var A = t.Ribs[0].A;
-                var B = t.Ribs[0].B;
-                var C = new Vertex<T>();
-
-                var rib1 = t.Ribs[1];
-
-                Rib<T> a = null;
-                Rib<T> b = null;
-                
-                if (rib1.A == A)
-                {
-                    a = t.Ribs[2];
-                    b = rib1;
-                    C = rib1.B;
-                }
-                else if (rib1.A == B)
-                {
-                    a = rib1;
-                    b = t.Ribs[2];
-                    C = rib1.B;
-                }
-                else if (rib1.B == A)
-                {
-                    a = t.Ribs[2];
-                    b = rib1;
-                    C = rib1.A;
-                }
-                else
-                {
-                    a = rib1;
-                    b = t.Ribs[2];
-                    C = rib1.A;
-                }
-
-                // Обновление вершин и ребер.
-                t.Points[0] = A;
-                t.Points[1] = B;
-                t.Points[2] = C;
-
-                t.Ribs[1] = a;
-                t.Ribs[2] = b;
-
-                t.CentreTriangle();
+                a = Ribs[2];
+                b = rib1;
+                C = rib1.B;
             }
+            else if (rib1.A == B)
+            {
+                a = rib1;
+                b = Ribs[2];
+                C = rib1.B;
+            }
+            else if (rib1.B == A)
+            {
+                a = Ribs[2];
+                b = rib1;
+                C = rib1.A;
+            }
+            else
+            {
+                a = rib1;
+                b = Ribs[2];
+                C = rib1.A;
+            }
+            
+            // Обновление вершин и ребер.
+            Points[0] = A;
+            Points[1] = B;
+            Points[2] = C;
+
+            Ribs[1] = a;
+            Ribs[2] = b;
         }
     }
 }

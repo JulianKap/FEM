@@ -5,201 +5,186 @@
     using System.Drawing;
     using System.Windows.Forms;
     using Delaunay;
-    using FEM;
+    using Geometry;
 
     /// <summary>
     /// Класс рисования.
     /// </summary>
-    public class Picture<T> where T : Triangle<T>
+    public class Picture
     {
         PictureBox picBox;  // Элемент интерфейса PictureBox.
         Graphics grafics;  // Поверхность для рисования.
 
-        HashSet<Circle> figures;  // Список фигур.
-        List<Vertex<T>> points;  // Список точек.
-        List<Rib<T>> ribs;  // Список ребер.
         
-
         /// <summary>
         /// Конструктор для фигур.
         /// </summary>
         /// <param name="picBox">Элемент интерфейса PictureBox.</param>
-        /// <param name="figures">Список фигур.</param>
-        public Picture(PictureBox picBox, HashSet<Circle> figures)
+        public Picture(PictureBox picBox)
         {
             this.picBox = picBox;
-            this.figures = figures;
 
-            Draw(0);
-        }
+            this.picBox.Image = new Bitmap(picBox.Width, picBox.Height);
+            grafics = Graphics.FromImage(this.picBox.Image);
+            ClearGrafics();
 
-        /// <summary>
-        /// Конструктор для сетки.
-        /// </summary>
-        /// <param name="picBox">Элемент интерфейса PictureBox.</param>
-        /// <param name="points">Список точек.</param>
-        /// <param name="ribs">Список ребер.</param>
-        public Picture(PictureBox picBox, List<Vertex<T>> points, List<Rib<T>> ribs)
-        {
-            this.picBox = picBox;
-            this.points = points;
-            this.ribs = ribs;
-
-            Draw(1);
+            grafics.ScaleTransform(0.99f, 0.99f); // Доработать масштабирование модели, позиции.
         }
         
         /// <summary>
-        /// Выбор методов построения рисунка в PictureBox.
+        /// Построение точек - датчиков.
         /// </summary>
-        /// <param name="n">Параметр выбора построения (от 0 до 1).</param>
-        public void Draw(int n)
+        /// <param name="viewPoints">Список датчиков.</param>
+        public void DrawElectrode(List<Vertex> viewPoints)
         {
-            picBox.Image = new Bitmap(picBox.Width, picBox.Height);
-            grafics = Graphics.FromImage(picBox.Image);
-            grafics.Clear(picBox.BackColor);
+            var myBrash = new SolidBrush(Color.DarkSlateBlue);
 
-            grafics.ScaleTransform(0.99f, 0.99f); // Доработать масштабирование модели, позиции.
-            
-            switch (n)
+            foreach (var point in viewPoints)
             {
-                case (0):
-                    DrawFigures();
-                    break;
-                case (1):
-                    DrawRibs();
-                    DrawPoints();
-                    break;
+                var p = InvertY(point);
+                grafics.FillEllipse(myBrash, p.X - 6 / 2, p.Y - 6 / 2, 6, 6);
+            }
+
+            myBrash.Dispose();
+            picBox.Refresh();
+        }
+
+        /// <summary>
+        /// Построение точек (Цветовая картина поля).
+        /// </summary>
+        /// <param name="points">Список точек.</param>
+        public void DrawPoints(List<Vertex> points)
+        {
+            var colors = getSpectrum();
+
+            int n = 3; // Размер точки.
+
+            var minPotencial = points.Min(p => p.Potential);
+            var step = (points.Max(p => p.Potential) - minPotencial) / 20;
+            
+            var range = step + minPotencial;  // Счетчик переключения цвета.
+            int i = 0;
+
+            foreach (var point in points.OrderBy(r => r.Potential))
+            {
+                var p = InvertY(point);
+                
+                var myBrash = new SolidBrush(colors[i]);
+                grafics.FillEllipse(myBrash, p.X - n / 2, p.Y - n / 2, n, n);
+                
+                if (point.Potential > range)
+                {
+                    range += step;
+                    i++;
+                }
+
+                myBrash.Dispose();
             }
             
             picBox.Refresh();
         }
 
         /// <summary>
-        /// Построение точек.
-        /// </summary>
-        private void DrawPoints()
-        {
-            var potentialHasValue = new SolidBrush(Color.FromArgb(192, 34, 59));
-            var myBrash = new SolidBrush(Color.DarkSlateBlue);
-
-            foreach (var point in points)
-            {
-                var p = InvertY(point);
-
-                if(point.Potential.HasValue)
-                    grafics.FillEllipse(potentialHasValue, p.X - 6 / 2, p.Y - 6 / 2, 6, 6);
-                else
-                    grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-            }
-        }
-
-        ///// <summary>
-        ///// Построение точек.
-        ///// </summary>
-        //private void DrawPoints()
-        //{
-        //    foreach (var point in points)
-        //    {
-        //        var p = InvertY(point);
-
-        //        if (point.Potential > 90)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.FromArgb(255, 0, 0));
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 90 && point.Potential > 80)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.FromArgb(255, 40, 0));
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 80 && point.Potential > 70)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.DarkBlue);
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 70 && point.Potential > 60)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.FromArgb(255, 115, 0));
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 60 && point.Potential > 50)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.Blue);
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 50 && point.Potential > 40)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.FromArgb(255, 175, 0));
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 40 && point.Potential > 30)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.Green);
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 30 && point.Potential > 20)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.FromArgb(255, 215, 0));
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 20 && point.Potential > 10)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.Cyan);
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //        else if (point.Potential <= 10)
-        //        {
-        //            SolidBrush myBrash = new SolidBrush(Color.FromArgb(255, 255, 0));
-        //            grafics.FillEllipse(myBrash, p.X - 5 / 2, p.Y - 5 / 2, 5, 5);
-        //        }
-        //    }
-        //}
-
-        /// <summary>
         /// Построение ребер.
         /// </summary>
-        private void DrawRibs()
+        /// <param name="ribs">Список ребер.</param>
+        /// <param name="full">False- рисовать ребра границ, true - рисовать все ребра.</param>
+        public void DrawRibs(List<Rib> ribs, bool full = false)
         {
             var myPen = new Pen(Color.YellowGreen);
             var myPenBorder = new Pen(Color.DarkSlateBlue);
 
-            foreach (var rib in ribs.Where(r => r.dfdn.HasValue == false || r.sigma.HasValue == false))
-            {
-                var p1 = InvertY(rib.A);
-                var p2 = InvertY(rib.B);
+            if (full)
+                foreach (var rib in ribs.Where(r => r.hasStruct == false))
+                {
+                    var p1 = InvertY(rib.A);
+                    var p2 = InvertY(rib.B);
 
-                grafics.DrawLine(myPen, p1.X, p1.Y, p2.X, p2.Y);
-            }
+                    grafics.DrawLine(myPen, p1.X, p1.Y, p2.X, p2.Y);
+                }
 
-            foreach (var rib in ribs.Where(r => r.dfdn.HasValue || r.sigma.HasValue))
+            foreach (var rib in ribs.Where(r => r.hasStruct))
             {
                 var p1 = InvertY(rib.A);
                 var p2 = InvertY(rib.B);
 
                 grafics.DrawLine(myPenBorder, p1.X, p1.Y, p2.X, p2.Y);
             }
+
+            myPen.Dispose();
+            myPenBorder.Dispose();
+            picBox.Refresh();
         }
 
         /// <summary>
         /// Построение окружностей.
         /// </summary>
-        private void DrawFigures()
+        /// <param name="figures">Список фигур.</param>
+        public void DrawFigures(List<IFigure> figures)
         {
             var myPen = new Pen(Color.FromArgb(67, 80, 162), 1);
-
+            
             foreach (var figure in figures)
             {
-                var p = InvertY(new Vertex<T>(figure.Centre.X, figure.Centre.Y));
-                grafics.DrawEllipse(myPen, p.X - figure.R, p.Y - figure.R, 2 * figure.R, 2 * figure.R);
+                if (figure is Circle)
+                {
+                    var circle = figure as Circle;
+
+                    var p = InvertY(circle.Centre);
+                    grafics.DrawEllipse(myPen, p.X - circle.R, p.Y - circle.R, 2 * circle.R, 2 * circle.R);
+                }
             }
+
+            myPen.Dispose();
+            picBox.Refresh();
+        }
+        
+        /// <summary>
+        /// Очистка формы
+        /// </summary>
+        public void ClearGrafics()
+        {
+            grafics.Clear(picBox.BackColor);
         }
 
         /// <summary>
         /// Инвертирование оси ординат.
         /// </summary>
-        public Vertex<T> InvertY(Vertex<T> p)
+        Vertex InvertY(Vertex p)
         {
-            return new Vertex<T>(p.X, picBox.Height - p.Y);
+            var h = picBox.Height;
+            return new Vertex(p.X, h - p.Y);
+        }
+
+        /// <summary>
+        /// Массив цветового спектра.
+        /// </summary>
+        Color[] getSpectrum()
+        {
+            var colors = new Color[] {
+            Color.FromArgb( 125, 205, 204),
+            Color.FromArgb( 111, 198, 164),
+            Color.FromArgb( 105, 193, 130),
+            Color.FromArgb( 102, 190, 95),
+            Color.FromArgb( 113, 191, 77),
+            Color.FromArgb( 137, 197, 64),
+            Color.FromArgb( 161, 204, 58),
+            Color.FromArgb( 186, 212, 50 ),
+            Color.FromArgb( 213, 223, 40),
+            Color.FromArgb( 240, 234, 39),
+            Color.FromArgb( 248, 239, 35),
+            Color.FromArgb( 255, 218, 25),
+            Color.FromArgb( 253, 191, 26),
+            Color.FromArgb( 249, 165, 31),
+            Color.FromArgb( 246, 143, 48),
+            Color.FromArgb( 244, 120, 74),
+            Color.FromArgb( 240, 98, 103),
+            Color.FromArgb( 238, 70, 142),
+            Color.FromArgb( 198, 67, 152),
+            Color.FromArgb( 166, 70, 154),
+            };
+
+            return colors;
         }
     }
 }

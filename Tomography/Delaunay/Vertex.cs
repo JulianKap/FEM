@@ -2,11 +2,14 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Runtime.Serialization;
+
 
     /// <summary>
     /// Класс вершин (точек в двумерном пространстве).
     /// </summary>
-    public class Vertex<T> : IEquatable<Vertex<T>> where T: Triangle<T>
+    [Serializable]
+    public  class Vertex : IEquatable<Vertex>, ISerializable
     {
         /// <summary>
         /// Координата точки по X.
@@ -19,11 +22,6 @@
         public float Y { get; protected set; }
 
         /// <summary>
-        /// Список треугольников, содержащих точку.
-        /// </summary>
-        public HashSet<T> Triangles { get; protected set; } = new HashSet<T>();
-
-        /// <summary>
         /// Значение потенциала.
         /// </summary>
         public double? Potential { get; set; }
@@ -33,9 +31,14 @@
         /// </summary>
         public int ID { get; set; }
 
+        /// <summary>
+        /// Соседние треугольники.
+        /// </summary>
+        public List<Triangle> adjacentTriangles { get; protected set; }
+
 
         /// <summary>
-        /// Пустой конструктор.
+        /// Пустой констуктор.
         /// </summary>
         public Vertex() : this(0, 0)
         { }
@@ -49,28 +52,21 @@
         {
             this.X = X;
             this.Y = Y;
+
+            adjacentTriangles = new List<Triangle>();
         }
 
         /// <summary>
-        /// Добавление треугольника в список.
+        /// Конструктор десериализации объекта.
         /// </summary>
-        /// <param name="triangles">Добавляемые треугольники.</param>
-        public void SetTriangle(params T[] triangles)
+        /// <param name="info">Данные.</param>
+        /// <param name="context">Источник.</param>
+        public Vertex(SerializationInfo info, StreamingContext context)
         {
-            foreach (var t in triangles)
-                Triangles.Add(t);
-        }
+            this.X = (float)info.GetValue("X", typeof(float));
+            this.Y = (float)info.GetValue("Y", typeof(float));
 
-        /// <summary>
-        /// Удаление треугольника из списка.
-        /// </summary>
-        /// <param name="t">Удаляемый треугольник. Если входной парамметр null, список полностью очищается.</param>
-        public void DelTriangle(T t = null)
-        {
-            if (t != null)
-                Triangles.Remove(t);
-            else
-                Triangles.Clear();
+            adjacentTriangles = new List<Triangle>();
         }
         
         /// <summary>
@@ -81,56 +77,56 @@
         /// <param name="p3">Координата 3.</param>
         /// <param name="p4">Координата 4.</param>
         /// <returns>Возвращается точка пересечения, или null в случае, если вектора не пересекаются.</returns>
-        public static Vertex<T> PointCross(Vertex<T> p1, Vertex<T> p2, Vertex<T> p3, Vertex<T> p4)
+        public static Vertex PointCross(Vertex p1, Vertex p2, Vertex p3, Vertex p4)
         {
             var d = Pseudoscalar(p2, p1, p3, p4);
-            var da = Pseudoscalar(p3, p1, p3, p4);
-            var db = Pseudoscalar(p2, p1, p3, p1);
-
-            var ta = da / d;
-            var tb = db / d;
-
-            if (ta >= 0 && ta <= 1 && tb >= 0 && tb <= 1)
-            {
-                var dx = p1.X + ta * (p2.X - p1.X);
-                var dy = p1.Y + ta * (p2.Y - p1.Y);
-                
-                return new Vertex<T>(dx, dy);
-            }
-
-            return null;
+            
+            var ta = Pseudoscalar(p3, p1, p3, p4) / d;
+            var tb = Pseudoscalar(p2, p1, p3, p1) / d;
+            
+            return ta >= 0 && ta <= 1 && tb >= 0 && tb <= 1 
+                ? new Vertex(p1.X + ta * (p2.X - p1.X), p1.Y + ta * (p2.Y - p1.Y)) 
+                : null;
         }
 
         /// <summary>
         /// Псевдоскалярное векторное произведение.
         /// </summary>
-        /// <param name="p1">Координата 1.</param>
-        /// <param name="p2">Координата 2.</param>
-        /// <param name="p3">Координата 3.</param>
-        /// <param name="p4">Координата 4.</param>
-        /// <returns>Возвращает псевдоскалярное векторное произведение.</returns>
-        public static float Pseudoscalar(Vertex<T> p1, Vertex<T> p2, Vertex<T> p3, Vertex<T> p4)
-        {
-            return (p2.X - p1.X) * (p4.Y - p3.Y) - (p2.Y - p1.Y) * (p4.X - p3.X);
-        }
+        public static Func<Vertex, Vertex, Vertex, Vertex, float> Pseudoscalar = (p1, p2, p3, p4) => 
+                           (p2.X - p1.X) * (p4.Y - p3.Y) - (p2.Y - p1.Y) * (p4.X - p3.X);
 
         /// <summary>
         /// Длина вектора.
         /// </summary>
-        /// <param name="p">Координата вектора.</param>
-        /// <returns>Возвращается длина вектора.</returns>
-        public float VectorLength(Vertex<T> p)
-        {
-            return (float)Math.Sqrt(Math.Pow(X - p.X, 2) + Math.Pow(Y - p.Y, 2));
-        }
+        public static Func<Vertex, Vertex, float> VectorLength = (p1, p2) =>
+                           (float)Math.Sqrt((p1.X - p2.X) * (p1.X - p2.X) + (p1.Y - p2.Y) * (p1.Y - p2.Y));
         
+        /// <summary>
+        /// Добавление соседнего треугольниа.
+        /// </summary>
+        /// <param name="t">Треугольник.</param>
+        public void SetTriangle(Triangle t)
+        {
+            if (!adjacentTriangles.Contains(t))
+                adjacentTriangles.Add(t);
+        }
+
+        /// <summary>
+        /// Удаление соседнего треугольника.
+        /// </summary>
+        /// <param name="t">Треугольник.</param>
+        public void DelTriangle(Triangle t)
+        {
+            adjacentTriangles.Remove(t);
+        }
+
         /// <summary>
         /// Унарный оператор равенства двух точек.
         /// </summary>
         /// <param name="a">Точка А.</param>
         /// <param name="b">Точка B.</param>
         /// <returns>True - точки равны, false - точки не равны.</returns>
-        public static bool operator ==(Vertex<T> a, Vertex<T> b)
+        public static bool operator ==(Vertex a, Vertex b)
         {
             if (ReferenceEquals(a, b))
                 return true;
@@ -147,7 +143,7 @@
         /// <param name="a">Точка А.</param>
         /// <param name="b">Точка B.</param>
         /// <returns>True - точки не равны, false - точки равны.</returns>
-        public static bool operator !=(Vertex<T> a, Vertex<T> b)
+        public static bool operator !=(Vertex a, Vertex b)
         {
             return !(a == b);
         }
@@ -157,7 +153,7 @@
         /// </summary>
         /// <param name="p">Точка для сравнения.</param>
         /// <returns>True - точки равны, false - точки не равны.</returns>
-        public bool Equals(Vertex<T> p)
+        public bool Equals(Vertex p)
         {
             return X == p.X && Y == p.Y;
         }
@@ -167,7 +163,7 @@
         /// </summary>
         public override bool Equals(Object obj)
         {
-            return Equals(obj as Vertex<T>);
+            return Equals(obj as Vertex);
         }
 
         /// <summary>
@@ -176,6 +172,17 @@
         public override int GetHashCode()
         {
             return X.GetHashCode() ^ Y.GetHashCode();
+        }
+
+        /// <summary>
+        /// Метод, вызываемый при сериализации.
+        /// </summary>
+        /// <param name="info">Данные.</param>
+        /// <param name="context">Источник.</param>
+        public void GetObjectData(SerializationInfo info, StreamingContext context)
+        {
+            info.AddValue("X", this.X);
+            info.AddValue("Y", this.Y);
         }
     }
 }

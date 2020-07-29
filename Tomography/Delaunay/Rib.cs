@@ -1,29 +1,32 @@
 ﻿namespace Tomography.Delaunay
 {
+    using System;
+
     /// <summary>
     /// Класс ребер.
     /// </summary>
-    public class Rib<T> where T: Triangle<T>
+    [Serializable]
+    public class Rib
     {
         /// <summary>
         /// Точка А.
         /// </summary>
-        public Vertex<T> A { get; }
+        public Vertex A { get; }
 
         /// <summary>
         /// Точка Б.
         /// </summary>
-        public Vertex<T> B { get; }
+        public Vertex B { get; }
 
         /// <summary>
         /// Первый треугольник, содержащий ребро.
         /// </summary>
-        public T T1 { get; private set; }
+        public Triangle T1 { get; private set; }
 
         /// <summary>
         /// Второй треугольник, содержащий ребро.
         /// </summary>
-        public T T2 { get; private set; }
+        public Triangle T2 { get; private set; }
 
         /// <summary>
         /// Нормальная производная на границе.
@@ -31,32 +34,15 @@
         public float? dfdn { get; set; }
 
         /// <summary>
-        /// Заряд на границе двух сред.
-        /// </summary>
-        public float? sigma { get; set; }
-
-        /// <summary>
         /// Длина ребра.
         /// </summary>
-        public float Lenght
-        {
-            get
-            {
-                if (!lenght.HasValue)
-                    lenght = A.VectorLength(B);
-
-                return lenght.Value;
-            }
-        }
-
-        private float? lenght;
-        
+        public float lenght { get; }
 
         /// <summary>
-        /// Пустой конструктор.
+        /// Структурное ребро.
         /// </summary>
-        public Rib()
-        { }
+        public bool hasStruct { get; set; }
+
 
         /// <summary>
         /// Конструктор.
@@ -65,21 +51,24 @@
         /// <param name="B">Точка Б.</param>
         /// <param name="T1">Первый треугольник.</param>
         /// <param name="T2">Второй треугольник.</param>
-        public Rib(Vertex<T> A, Vertex<T> B, T T1, T T2)
+        public Rib(Vertex A, Vertex B, Triangle T1, Triangle T2)
         {
             this.A = A;
             this.B = B;
             this.T1 = T1;
             this.T2 = T2;
+
+            lenght = Vertex.VectorLength(A, B);
+            hasStruct = false;
         }
-        
+
         /// <summary>
         /// Обновление треугольников для ребра.
         /// /Треугольник 1\ |ребро| /Треугольник 2\
         /// </summary>
         /// <param name="old">Старый треугольник.</param>
         /// <param name="New">Новый треугольник.</param>
-        public void UpdateTriangle(T old, T New)
+        public void UpdateTriangle(Triangle old, Triangle New)
         {
             if (T1 == old)
                 T1 = New;
@@ -92,24 +81,19 @@
         /// </summary>
         /// <param name="T">Треугольник, для которого ищется соседний по ребру.</param>
         /// <returns>Возвращение соседнего треугольника.</returns>
-        public T GetTriangleNeighbor(T T)
+        public Triangle GetTriangleNeighbor(Triangle T)
         {
-            if (T == T1)
-                return T2;
-
-            return T1;
+            return T == T1 ? T2 : T1;
         }
 
         /// <summary>
-        /// Добавление граничных условий
+        /// Добавление граничных условий (копирование граничных условий другого ребра).
         /// </summary>
-        /// <param name="rib"></param>
-        public void SetBorderValue(Rib<T> rib)
+        /// <param name="rib">Ребро с граничными условиями.</param>
+        public void SetBorderValue(Rib rib)
         {
             if (rib.dfdn.HasValue)
                 dfdn = rib.dfdn.Value;
-            else if (rib.sigma.HasValue)
-                sigma = rib.sigma.Value;
         }
     }
 }
